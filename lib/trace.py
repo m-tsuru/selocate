@@ -2,8 +2,12 @@ import dataclasses
 import json
 import sys
 import time
+from pathlib import Path
 
-from .scan import scan
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from lib.scan import scan
 
 SCAN_INTERVAL = 2  # seconds
 
