@@ -54,7 +54,7 @@ try:
             data.append(dataclasses.asdict(trace))
 
         # Write back
-        with Path(TRACE_FILE).open("w") as f:
+        with Path(f"{TRACE_FILE_PREFIX}-{save_date}.json").open("w") as f:
             json.dump(data, f, indent=2)
 
         time.sleep(SCAN_INTERVAL)
