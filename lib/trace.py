@@ -26,29 +26,19 @@ class Trace:
 try:
     while True:
         networks = scan()
-        res = [
-            Trace(
-                t=int(time.time()),
-                x=0,
-                y=0,
-                bssid=n["bssid"],
-                ssid=n["ssid"],
-                rssi=n["signal"],
-                freq=n["freq"],
-            )
-            for n in networks
-        ]
-        for n in networks:
-            trace = Trace(
-                t=int(time.time()),
-                bssid=n["bssid"],
-                ssid=n["ssid"],
-                rssi=n["signal"],
-                freq=n["freq"],
-            )
-            print(
-                json.dumps([dataclasses.asdict(trace) for trace in res]),
-            )
+        with open("trace.json", "a") as f:
+            for n in networks:
+                trace = Trace(
+                    t=int(time.time()),
+                    x=0,
+                    y=0,
+                    bssid=n["bssid"],
+                    ssid=n["ssid"],
+                    rssi=n["signal"],
+                    freq=n["freq"],
+                )
+                f.write(json.dumps(dataclasses.asdict(trace)) + "\n")
+
         time.sleep(SCAN_INTERVAL)
 except KeyboardInterrupt:
     sys.exit(1)
