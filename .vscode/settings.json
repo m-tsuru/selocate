@@ -1,5 +1,6 @@
 {
     "editor.formatOnSave": true,
+    "python.languageServer": "None",
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff"
     }
