@@ -1,0 +1,22 @@
+[lint]
+select = ["ALL"]
+
+extend-select = [
+    "ANN", # 型アノテーション
+    "FA",  # 型チェック関連の一部
+    "I",
+]
+
+ignore = [
+    "E501", # 行長制限
+    "D",    # ドキュメンテーション文字列のチェック
+]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+skip-magic-trailing-comma = false
+
+[lint.isort]
+combine-as-imports = true
