@@ -3,7 +3,7 @@ import json
 import sys
 import time
 
-from . import scan
+from lib.scan import scan
 
 SCAN_INTERVAL = 2  # seconds
 
