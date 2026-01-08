@@ -3,7 +3,7 @@ import json
 import sys
 import time
 
-import lib
+from . import scan
 
 SCAN_INTERVAL = 2  # seconds
 
@@ -21,7 +21,7 @@ class Trace:
 
 try:
     while True:
-        networks = lib.scan()
+        networks = scan()
         res = [
             Trace(
                 t=int(time.time()),
