@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from lib.scan import scan
 
 SCAN_INTERVAL = 2  # seconds
-TRACE_FILE = "trace.json"
+TRACE_FILE_PREFIX = "trace"
 
 
 @dataclasses.dataclass
@@ -26,12 +26,16 @@ class Trace:
 
 
 try:
+    save_date = int(time.time())
     while True:
         networks = scan()
 
         # Read existing data
-        if Path(TRACE_FILE).exists() and Path(TRACE_FILE).stat().st_size > 0:
-            with Path(TRACE_FILE).open("r") as f:
+        if (
+            Path(f"{TRACE_FILE_PREFIX}-{save_date}.json").exists()
+            and Path(f"{TRACE_FILE_PREFIX}-{save_date}.json").stat().st_size > 0
+        ):
+            with Path(f"{TRACE_FILE_PREFIX}-{save_date}.json").open("r") as f:
                 data = json.load(f)
         else:
             data = []
