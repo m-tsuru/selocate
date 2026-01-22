@@ -12,7 +12,7 @@ import serial
 # === パラメータ設定（調整可能な変数） ===
 # シリアル通信設定
 EXPECTED_ELEMENTS = 8  # パース時の期待要素数
-BAUD_RATE = 9600  # シリアル通信のボーレート
+BAUD_RATE = 115200  # シリアル通信のボーレート
 
 # カルマンフィルター設定
 KALMAN_PROCESS_VARIANCE = 1e-4  # プロセスノイズ共分散
