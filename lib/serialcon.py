@@ -29,7 +29,7 @@ VELOCITY_THRESHOLD = 0.05  # 速度ノイズの閾値 [m/s]
 ACC_THRESHOLD = 0.1  # 加速度の閾値 [m/s²]
 
 # 駆動制御設定
-DIRECTION = (1, 1, 1, 1)  # 正転 (1), 逆転 (-1) のタプル
+DIRECTION = (1, 1, -1, 1)  # 正転 (1), 逆転 (-1) のタプル
 WHEEL_PORT = (False, True, True, False)  # ホイールのポート割り当て
 DIRECTION_PORT = (True, False, False, False)  # 方向制御のポート割り当て
 
