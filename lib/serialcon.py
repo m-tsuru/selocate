@@ -187,6 +187,8 @@ def run_motor(direction_power: int, wheel_power: int) -> str:
             s += str(direction_power * DIRECTION[i])
         elif DIRECTION_PORT[i]:
             s += str(wheel_power * DIRECTION[i])
+        else:
+            s += "0"
         if i < 3:
             s += " "
     return s
@@ -333,15 +335,17 @@ class SerialController:
         """メインループ"""
         while self.running:
             try:
+                # シリアルデータを受信して処理
                 if self.serial and self.serial.in_waiting > 0:
                     raw = self.serial.readline().decode("utf-8").strip()
                     await self._process_data(raw)
 
-                    # モーター制御を送信
+                # モーター制御を常に送信（データ受信に関係なく）
+                if self.serial and self.serial.is_open:
                     props = run_motor(
                         self.motor.direction_power, self.motor.wheel_power
                     )
-                    self.serial.write(props.encode())
+                    self.serial.write((props + "\n").encode())
 
                 await asyncio.sleep(0.01)  # 10ms待機
             except Exception as e:
