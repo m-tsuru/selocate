@@ -1,13 +1,20 @@
+from __future__ import annotations
+
 import time
+from typing import TYPE_CHECKING
 
 import pywifi
+
+if TYPE_CHECKING:
+    from pywifi import iface as pywifi_iface
 
 SCAN_TIME = 2
 
 
 def get_interface(
-    name: str | None = None, index: int = 0
-) -> pywifi.interfaces.Interface:
+    name: str | None = None,
+    index: int = 0,
+) -> pywifi_iface.Interface | None:
     """Wi-Fiインターフェースを取得する
 
     Args:
