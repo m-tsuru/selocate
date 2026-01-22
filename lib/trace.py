@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from lib.scan import scan
 
-SCAN_INTERVAL = 2  # seconds
+SCAN_INTERVAL = 1  # seconds - デフォルト間隔
 TRACE_FILE_PREFIX = "trace"
 
 

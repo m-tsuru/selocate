@@ -8,7 +8,8 @@ import pywifi
 if TYPE_CHECKING:
     from pywifi import iface as pywifi_iface
 
-SCAN_TIME = 2
+# スキャン後の待機時間（秒）- 短すぎると結果が不完全になる可能性あり
+SCAN_TIME = 1
 
 
 def get_interface(
@@ -86,13 +87,6 @@ def scan(
             print(f"[scan] Cached results: {len(results)} networks")
             return results
         return []
-
-    # 前回のスキャンから十分な時間が経っていない場合は待機
-    elapsed = time.time() - _last_scan_time
-    if elapsed < SCAN_TIME:
-        wait_time = SCAN_TIME - elapsed
-        print(f"[scan] Waiting {wait_time:.1f}s before next scan")
-        time.sleep(wait_time)
 
     iface = get_interface(name=interface_name)
     if not iface:
