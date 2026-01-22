@@ -179,8 +179,10 @@
                 }
                 document.getElementById('ap-count').textContent = data.ap_count || 0;
                 document.getElementById('total-traces').textContent = data.total_traces || 0;
-                if (data.scan_interval) {
-                    document.getElementById('scan-interval').value = data.scan_interval;
+                // スライダーがフォーカス中でなければサーバーの値で更新
+                const slider = document.getElementById('scan-interval');
+                if (document.activeElement !== slider && data.scan_interval) {
+                    slider.value = data.scan_interval;
                     document.getElementById('scan-interval-value').textContent = data.scan_interval;
                 }
             } catch (e) {
