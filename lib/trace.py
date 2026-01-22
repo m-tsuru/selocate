@@ -52,7 +52,7 @@ class TraceController:
         self.scan_interval = SCAN_INTERVAL
         self.state = TraceState(scan_interval=self.scan_interval)
         self._task: asyncio.Task | None = None
-        self._position_callback: Callable[[], tuple[float, float]] | None = None
+        self._position_callback: Callable[[], tuple[float, float, float]] | None = None
         self._on_state_update: Callable[[TraceState, list[dict]], None] | None = None
         self._data: list[dict] = []
 
@@ -65,7 +65,7 @@ class TraceController:
         self.scan_interval = max(1.0, interval)  # 最小1秒
         self.state.scan_interval = self.scan_interval
 
-    def set_position_callback(self, callback: Callable[[], tuple[float, float]]):
+    def set_position_callback(self, callback: Callable[[], tuple[float, float, float]]):
         """位置情報を取得するコールバックを設定"""
         self._position_callback = callback
 
@@ -128,9 +128,9 @@ class TraceController:
                 networks = await asyncio.to_thread(scan, self.interface_name)
 
                 # 位置情報を取得
-                x, y = 0.0, 0.0
+                x, y, z = 0.0, 0.0, 0.0
                 if self._position_callback:
-                    x, y = self._position_callback()
+                    x, y, z = self._position_callback()
 
                 # トレースデータを追加
                 current_time = int(time.time())
@@ -139,6 +139,7 @@ class TraceController:
                         t=current_time,
                         x=x,
                         y=y,
+                        z=z,
                         bssid=n.get("bssid", ""),
                         ssid=n.get("ssid", ""),
                         rssi=n.get("signal", 0),

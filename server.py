@@ -36,7 +36,11 @@ async def lifespan(app: FastAPI):
 
     # トレースコントローラーに位置情報コールバックを設定
     trace_ctrl.set_position_callback(
-        lambda: (serial_ctrl.get_state().x, serial_ctrl.get_state().y)
+        lambda: (
+            serial_ctrl.get_state().x,
+            serial_ctrl.get_state().y,
+            serial_ctrl.get_state().z,
+        )
     )
 
     yield
