@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
-from fasticfiles import StaticFiles
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from lib.scan import list_interfaces
