@@ -1,14 +1,19 @@
+import os
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fasticfiles import StaticFiles
 from pydantic import BaseModel
 
+from lib.scan import list_interfaces
 from lib.serialcon import get_serial_controller
 from lib.trace import get_trace_controller
+
+# 環境変数からWi-Fiインターフェース名を取得
+WIFI_INTERFACE = os.getenv("WIFI_INTERFACE", None)
 
 
 class MotorCommand(BaseModel):
@@ -21,7 +26,12 @@ async def lifespan(app: FastAPI):
     """アプリケーションのライフサイクル管理"""
     # 起動時の処理
     serial_ctrl = get_serial_controller()
-    trace_ctrl = get_trace_controller()
+    trace_ctrl = get_trace_controller(interface_name=WIFI_INTERFACE)
+
+    if WIFI_INTERFACE:
+        print(f"Using Wi-Fi interface: {WIFI_INTERFACE}")
+    else:
+        print("Using default Wi-Fi interface")
 
     # トレースコントローラーに位置情報コールバックを設定
     trace_ctrl.set_position_callback(
@@ -90,6 +100,30 @@ async def serial_reset():
     ctrl = get_serial_controller()
     ctrl.reset_position()
     return {"status": "ok", "message": "Position reset"}
+
+
+# === Wi-Fi インターフェース API ===
+@api.get("/wifi/interfaces")
+async def wifi_interfaces():
+    """利用可能なWi-Fiインターフェース一覧を取得"""
+    try:
+        interfaces = list_interfaces()
+        return {
+            "interfaces": interfaces,
+            "current": WIFI_INTERFACE,
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=500, content={"status": "error", "message": str(e)}
+        )
+
+
+@api.post("/wifi/interface")
+async def wifi_set_interface(interface_name: str | None = None):
+    """使用するWi-Fiインターフェースを変更"""
+    ctrl = get_trace_controller()
+    ctrl.set_interface(interface_name)
+    return {"status": "ok", "interface": interface_name}
 
 
 # === トレース API ===

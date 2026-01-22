@@ -42,13 +42,20 @@ class TraceState:
 class TraceController:
     """WiFiトレースを非同期で制御するクラス"""
 
-    def __init__(self, output_dir: str | None = None):
+    def __init__(
+        self, output_dir: str | None = None, interface_name: str | None = None
+    ):
         self.output_dir = Path(output_dir) if output_dir else Path(".")
+        self.interface_name = interface_name
         self.state = TraceState()
         self._task: asyncio.Task | None = None
         self._position_callback: Callable[[], tuple[float, float]] | None = None
         self._on_state_update: Callable[[TraceState, list[dict]], None] | None = None
         self._data: list[dict] = []
+
+    def set_interface(self, interface_name: str | None):
+        """使用するWi-Fiインターフェースを設定"""
+        self.interface_name = interface_name
 
     def set_position_callback(self, callback: Callable[[], tuple[float, float]]):
         """位置情報を取得するコールバックを設定"""
@@ -110,7 +117,7 @@ class TraceController:
         """メインループ"""
         while self.state.running:
             try:
-                networks = await asyncio.to_thread(scan)
+                networks = await asyncio.to_thread(scan, self.interface_name)
 
                 # 位置情報を取得
                 x, y = 0.0, 0.0
@@ -148,9 +155,13 @@ class TraceController:
 _trace_controller: TraceController | None = None
 
 
-def get_trace_controller() -> TraceController:
-    """トレースコントローラーのシングルトンを取得"""
+def get_trace_controller(interface_name: str | None = None) -> TraceController:
+    """トレースコントローラーのシングルトンを取得
+
+    Args:
+        interface_name: Wi-Fiインターフェース名（初回呼び出し時のみ有効）
+    """
     global _trace_controller
     if _trace_controller is None:
-        _trace_controller = TraceController()
+        _trace_controller = TraceController(interface_name=interface_name)
     return _trace_controller
