@@ -23,6 +23,12 @@ ACC_MOTION_THRESHOLD = 0.3  # 移動加速度の最小閾値 [m/s²]
 VELOCITY_THRESHOLD = 0.05  # 速度ノイズの閾値 [m/s]
 ACC_THRESHOLD = 0.1  # 加速度の閾値 [m/s²]
 
+# 駆動制御設定
+DIRECTION = (1, 1, 1, 1)  # 正転 (1), 逆転 (-1) のタプル
+WHEEL_PORT = (False, True, True, False)  # ホイールのポート割り当て
+DIRECTION_PORT = (True, False, False, False)  # 方向制御のポート割り当て
+
+
 # その他の設定
 ERROR_RANGE = 0  # 従来のエラー範囲（未使用の可能性あり）
 
@@ -142,6 +148,18 @@ def _dist(
         return x0 + v0 * dt + 0.5 * a * dt**2
 
     return __dist(x, v0x, ax, dt), __dist(y, v0y, ay, dt), __dist(z, v0z, az, dt)
+
+
+def run_motor(direction_power: int, wheel_power: int) -> str:
+    s = ""
+    for i in range(4):
+        if WHEEL_PORT[i]:
+            s += str(direction_power * DIRECTION[i])
+        elif DIRECTION_PORT[i]:
+            s += str(wheel_power * DIRECTION[i])
+        if i < 3:
+            s += " "
+    return s
 
 
 def parse_serial(
