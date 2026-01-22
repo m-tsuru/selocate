@@ -15,18 +15,18 @@ EXPECTED_ELEMENTS = 8  # パース時の期待要素数
 BAUD_RATE = 115200  # シリアル通信のボーレート
 
 # カルマンフィルター設定
-KALMAN_PROCESS_VARIANCE = 1e-4  # プロセスノイズ共分散
-KALMAN_MEASUREMENT_VARIANCE = 1e-1  # 観測ノイズ共分散
+KALMAN_PROCESS_VARIANCE = 1e-3  # プロセスノイズ共分散（上げると追従性向上）
+KALMAN_MEASUREMENT_VARIANCE = 5e-2  # 観測ノイズ共分散（下げると感度向上）
 KALMAN_RESET_COVARIANCE = 0.1  # リセット時の誤差共分散
 
 # 静止判定設定
-STATIONARY_THRESHOLD = 0.5  # 静止判定の閾値（重力加速度との差）
+STATIONARY_THRESHOLD = 0.3  # 静止判定の閾値（重力加速度との差）（下げると動き検出しやすい）
 GRAVITY = 9.80665  # 重力加速度 [m/s²]
 
 # 加速度ノイズ除去設定
-ACC_MOTION_THRESHOLD = 0.3  # 移動加速度の最小閾値 [m/s²]
-VELOCITY_THRESHOLD = 0.05  # 速度ノイズの閾値 [m/s]
-ACC_THRESHOLD = 0.1  # 加速度の閾値 [m/s²]
+ACC_MOTION_THRESHOLD = 0.1  # 移動加速度の最小閾値 [m/s²]（下げると遅い動き検出）
+VELOCITY_THRESHOLD = 0.02  # 速度ノイズの閾値 [m/s]（下げると遅い速度も保持）
+ACC_THRESHOLD = 0.05  # 加速度の閾値 [m/s²]
 
 # 駆動制御設定
 DIRECTION = (1, 1, -1, 1)  # 正転 (1), 逆転 (-1) のタプル
