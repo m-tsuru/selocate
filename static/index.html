@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SELocate Control</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        fieldset {
+            margin-bottom: 20px;
+            padding: 15px;
+        }
+        button {
+            margin: 5px;
+            padding: 10px 15px;
+            cursor: pointer;
+        }
+        .status {
+            padding: 5px 10px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+        .status.running {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .status.stopped {
+            background-color: #f44336;
+            color: white;
+        }
+        .control-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, 60px);
+            gap: 5px;
+            justify-content: center;
+            margin: 15px 0;
+        }
+        .control-buttons button {
+            width: 60px;
+            height: 60px;
+            font-size: 20px;
+        }
+        #motor-status {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>SELocate Control</h1>
+
+    <fieldset>
+        <legend>モード</legend>
+        <select name="mode" id="mode">
+            <option value="trace" selected>trace</option>
+            <option value="challenge">challenge</option>
+        </select>
+        <button id="btn-download">データダウンロード</button>
+        <input type="file" id="case_upload" name="case_upload" accept="application/json" />
+        <button id="btn-upload">チャレンジデータアップロード</button>
+    </fieldset>
+
+    <fieldset>
+        <legend>WiFiスキャン</legend>
+        <p>Status: <span id="trace-status" class="status stopped">停止中</span></p>
+        <p>Found Access Points: <span id="ap-count">0</span></p>
+        <p>Total Traces: <span id="total-traces">0</span></p>
+        <button id="btn-trace-start">Start</button>
+        <button id="btn-trace-stop">Stop</button>
+        <button id="btn-trace-reset">Reset</button>
+        <button id="btn-trace-save">データ保存</button>
+    </fieldset>
+
+    <fieldset>
+        <legend>シリアル通信</legend>
+        <p>Status: <span id="serial-status" class="status stopped">停止中</span></p>
+        <button id="btn-serial-start">Start</button>
+        <button id="btn-serial-stop">Stop</button>
+        <button id="btn-serial-reset">位置リセット</button>
+    </fieldset>
+
+    <fieldset>
+        <legend>移動制御</legend>
+        <p id="acc-display">[acc] x: 0.000, y: 0.000, z: 0.000</p>
+        <p id="velo-display">[velo] x: 0.000, y: 0.000, z: 0.000</p>
+        <p id="pos-display">[pos] x: 0.000, y: 0.000, z: 0.000</p>
+
+        <label for="speed">速度: <span id="speed-value">100</span></label>
+        <input type="range" id="speed" name="speed" min="0" max="255" value="100" />
+
+        <div class="control-buttons">
+            <div></div>
+            <button id="btn-forward">↑</button>
+            <div></div>
+            <button id="btn-left">←</button>
+            <button id="btn-stop">■</button>
+            <button id="btn-right">→</button>
+            <div></div>
+            <button id="btn-backward">↓</button>
+            <div></div>
+        </div>
+
+        <div id="motor-status">
+            Direction Power: <span id="direction-power">0</span>,
+            Wheel Power: <span id="wheel-power">0</span>
+        </div>
+    </fieldset>
+
+    <script>
+        // === API Helper ===
+        const api = {
+            async post(endpoint, data = {}) {
+                const res = await fetch(`/api${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                return res.json();
+            },
+            async get(endpoint) {
+                const res = await fetch(`/api${endpoint}`);
+                return res.json();
+            }
+        };
+
+        // === State Update ===
+        let updateInterval = null;
+
+        async function updateSerialState() {
+            try {
+                const data = await api.get('/serial/state');
+                const statusEl = document.getElementById('serial-status');
+                if (data.running) {
+                    statusEl.textContent = '実行中';
+                    statusEl.className = 'status running';
+                } else {
+                    statusEl.textContent = '停止中';
+                    statusEl.className = 'status stopped';
+                }
+
+                if (data.state) {
+                    const s = data.state;
+                    document.getElementById('acc-display').textContent =
+                        `[acc] x: ${s.ax.toFixed(3)}, y: ${s.ay.toFixed(3)}, z: ${s.az.toFixed(3)}`;
+                    document.getElementById('velo-display').textContent =
+                        `[velo] x: ${s.vx.toFixed(3)}, y: ${s.vy.toFixed(3)}, z: ${s.vz.toFixed(3)}`;
+                    document.getElementById('pos-display').textContent =
+                        `[pos] x: ${s.x.toFixed(3)}, y: ${s.y.toFixed(3)}, z: ${s.z.toFixed(3)}`;
+                }
+            } catch (e) {
+                console.error('Serial state error:', e);
+            }
+        }
+
+        async function updateTraceState() {
+            try {
+                const data = await api.get('/trace/state');
+                const statusEl = document.getElementById('trace-status');
+                if (data.running) {
+                    statusEl.textContent = '実行中';
+                    statusEl.className = 'status running';
+                } else {
+                    statusEl.textContent = '停止中';
+                    statusEl.className = 'status stopped';
+                }
+                document.getElementById('ap-count').textContent = data.ap_count || 0;
+                document.getElementById('total-traces').textContent = data.total_traces || 0;
+            } catch (e) {
+                console.error('Trace state error:', e);
+            }
+        }
+
+        function startUpdates() {
+            if (updateInterval) return;
+            updateInterval = setInterval(() => {
+                updateSerialState();
+                updateTraceState();
+            }, 500);
+        }
+
+        function stopUpdates() {
+            if (updateInterval) {
+                clearInterval(updateInterval);
+                updateInterval = null;
+            }
+        }
+
+        // === Serial Control ===
+        document.getElementById('btn-serial-start').addEventListener('click', async () => {
+            await api.post('/serial/start');
+            startUpdates();
+        });
+
+        document.getElementById('btn-serial-stop').addEventListener('click', async () => {
+            await api.post('/serial/stop');
+        });
+
+        document.getElementById('btn-serial-reset').addEventListener('click', async () => {
+            await api.post('/serial/reset');
+        });
+
+        // === Trace Control ===
+        document.getElementById('btn-trace-start').addEventListener('click', async () => {
+            await api.post('/trace/start');
+            startUpdates();
+        });
+
+        document.getElementById('btn-trace-stop').addEventListener('click', async () => {
+            await api.post('/trace/stop');
+        });
+
+        document.getElementById('btn-trace-reset').addEventListener('click', async () => {
+            await api.post('/trace/reset');
+        });
+
+        document.getElementById('btn-trace-save').addEventListener('click', async () => {
+            const result = await api.post('/trace/save');
+            alert(`保存しました: ${result.filename}`);
+        });
+
+        // === Data Download/Upload ===
+        document.getElementById('btn-download').addEventListener('click', () => {
+            window.location.href = '/api/trace/download';
+        });
+
+        document.getElementById('btn-upload').addEventListener('click', async () => {
+            const fileInput = document.getElementById('case_upload');
+            if (!fileInput.files.length) {
+                alert('ファイルを選択してください');
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            const res = await fetch('/api/trace/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await res.json();
+            alert(`アップロード完了: ${result.filename || result.message}`);
+        });
+
+        // === Motor Control ===
+        async function setMotor(direction, wheel) {
+            const result = await api.post('/serial/motor', {
+                direction_power: direction,
+                wheel_power: wheel
+            });
+            document.getElementById('direction-power').textContent = result.direction_power;
+            document.getElementById('wheel-power').textContent = result.wheel_power;
+        }
+
+        const speedSlider = document.getElementById('speed');
+        speedSlider.addEventListener('input', (e) => {
+            document.getElementById('speed-value').textContent = e.target.value;
+        });
+
+        function getSpeed() {
+            return parseInt(speedSlider.value);
+        }
+
+        document.getElementById('btn-forward').addEventListener('click', () => setMotor(0, getSpeed()));
+        document.getElementById('btn-backward').addEventListener('click', () => setMotor(0, -getSpeed()));
+        document.getElementById('btn-left').addEventListener('click', () => setMotor(-getSpeed(), 0));
+        document.getElementById('btn-right').addEventListener('click', () => setMotor(getSpeed(), 0));
+        document.getElementById('btn-stop').addEventListener('click', () => setMotor(0, 0));
+
+        // キーボード操作
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowUp':
+                case 'w':
+                    setMotor(0, getSpeed());
+                    break;
+                case 'ArrowDown':
+                case 's':
+                    setMotor(0, -getSpeed());
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                    setMotor(-getSpeed(), 0);
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                    setMotor(getSpeed(), 0);
+                    break;
+                case ' ':
+                    setMotor(0, 0);
+                    break;
+            }
+        });
+
+        // 初期化
+        updateSerialState();
+        updateTraceState();
+    </script>
+</body>
+
+</html>
