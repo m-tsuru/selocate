@@ -1,4 +1,9 @@
+from __future__ import annotations
+
+import asyncio
 import os
+from collections.abc import Callable
+from dataclasses import dataclass, field
 
 import dotenv
 import numpy as np
@@ -31,6 +36,31 @@ DIRECTION_PORT = (True, False, False, False)  # 方向制御のポート割り�
 
 # その他の設定
 ERROR_RANGE = 0  # 従来のエラー範囲（未使用の可能性あり）
+
+
+@dataclass
+class MotionState:
+    """モーション状態を保持するデータクラス"""
+
+    ax: float = 0.0
+    ay: float = 0.0
+    az: float = 0.0
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    x: float = 0.0
+    y: float = 0.0
+    z: float = 0.0
+    t: float = 0.0
+    is_stationary: bool = True
+
+
+@dataclass
+class MotorControl:
+    """モーター制御の状態"""
+
+    direction_power: int = 0
+    wheel_power: int = 0
 
 
 # カスタム例外クラス
@@ -220,124 +250,202 @@ def parse_serial(
 dotenv.load_dotenv()
 
 if "PORT" in dotenv.dotenv_values():
-    PORT: str | None = os.getenv("PORT")
+    SERIAL_PORT: str | None = os.getenv("PORT")
 else:
-    PORT = "/dev/serial0"
+    SERIAL_PORT = "/dev/serial0"
 
-try:
-    s: serial.Serial = serial.Serial(PORT)
-    s.baudrate: int = BAUD_RATE
-    vx, vy, vz, x, y, z, before_t = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 
-    # 各軸にカルマンフィルターを初期化
-    kf_x = KalmanFilter(
-        process_variance=KALMAN_PROCESS_VARIANCE,
-        measurement_variance=KALMAN_MEASUREMENT_VARIANCE,
-    )
-    kf_y = KalmanFilter(
-        process_variance=KALMAN_PROCESS_VARIANCE,
-        measurement_variance=KALMAN_MEASUREMENT_VARIANCE,
-    )
-    kf_z = KalmanFilter(
-        process_variance=KALMAN_PROCESS_VARIANCE,
-        measurement_variance=KALMAN_MEASUREMENT_VARIANCE,
-    )
+class SerialController:
+    """シリアル通信を非同期で制御するクラス"""
 
-    while True:
-        raw: str = s.readline().decode("utf-8").strip()
+    def __init__(self, port: str | None = None):
+        self.port = port or SERIAL_PORT
+        self.serial: serial.Serial | None = None
+        self.running = False
+        self.state = MotionState()
+        self.motor = MotorControl()
+        self.before_t = 0.0
+        self._task: asyncio.Task | None = None
+        self._on_state_update: Callable[[MotionState], None] | None = None
+
+        # カルマンフィルター
+        self.kf_x = KalmanFilter(
+            process_variance=KALMAN_PROCESS_VARIANCE,
+            measurement_variance=KALMAN_MEASUREMENT_VARIANCE,
+        )
+        self.kf_y = KalmanFilter(
+            process_variance=KALMAN_PROCESS_VARIANCE,
+            measurement_variance=KALMAN_MEASUREMENT_VARIANCE,
+        )
+        self.kf_z = KalmanFilter(
+            process_variance=KALMAN_PROCESS_VARIANCE,
+            measurement_variance=KALMAN_MEASUREMENT_VARIANCE,
+        )
+
+    def on_state_update(self, callback: Callable[[MotionState], None]):
+        """状態更新時のコールバックを設定"""
+        self._on_state_update = callback
+
+    def set_motor(self, direction_power: int, wheel_power: int):
+        """モーターの制御値を設定"""
+        self.motor.direction_power = direction_power
+        self.motor.wheel_power = wheel_power
+
+    def get_state(self) -> MotionState:
+        """現在のモーション状態を取得"""
+        return self.state
+
+    def reset_position(self):
+        """位置をリセット"""
+        self.state.x = 0.0
+        self.state.y = 0.0
+        self.state.z = 0.0
+        self.kf_x.x[0] = 0.0
+        self.kf_y.x[0] = 0.0
+        self.kf_z.x[0] = 0.0
+
+    async def start(self):
+        """シリアル通信を開始"""
+        if self.running:
+            return
+        try:
+            self.serial = serial.Serial(self.port)
+            self.serial.baudrate = BAUD_RATE
+            self.running = True
+            self._task = asyncio.create_task(self._loop())
+        except serial.SerialException as e:
+            print(f"Serial error: {e}")
+            raise
+
+    async def stop(self):
+        """シリアル通信を停止"""
+        self.running = False
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+        if self.serial and self.serial.is_open:
+            self.serial.close()
+
+    async def _loop(self):
+        """メインループ"""
+        while self.running:
+            try:
+                if self.serial and self.serial.in_waiting > 0:
+                    raw = self.serial.readline().decode("utf-8").strip()
+                    await self._process_data(raw)
+
+                    # モーター制御を送信
+                    props = run_motor(
+                        self.motor.direction_power, self.motor.wheel_power
+                    )
+                    self.serial.write(props.encode())
+
+                await asyncio.sleep(0.01)  # 10ms待機
+            except Exception as e:
+                print(f"Loop error: {e}")
+                await asyncio.sleep(0.1)
+
+    async def _process_data(self, raw: str):
+        """受信データを処理"""
         success, t, ax, ay, az, _, _, _ = parse_serial(raw)
         if not success:
-            continue
-        t, ax, ay, az = t / 1000, ax or 0.0, ay or 0.0, az or 0.0  # ty:ignore[unsupported-operator]
-        dt = t - before_t
-        if dt > 0:  # 最初のイテレーションをスキップ
-            before_t = t
+            return
+
+        t, ax, ay, az = t / 1000, ax or 0.0, ay or 0.0, az or 0.0
+        dt = t - self.before_t
+
+        if dt > 0:
+            self.before_t = t
             ax, ay, az = _acc(ax, ay, az)
 
-            # 重力加速度の大きさをチェック
             total_acc = (ax**2 + ay**2 + az**2) ** 0.5
-
-            # 総加速度が重力加速度に近い場合、実際の移動加速度はゼロとみなす
-            # （センサーが静止しているか等速直線運動中）
             is_stationary = abs(total_acc - GRAVITY) < STATIONARY_THRESHOLD
 
             if is_stationary:
-                # 重力成分のみで移動加速度なし
                 ax_motion, ay_motion, az_motion = 0.0, 0.0, 0.0
             else:
-                # 重力を考慮した移動加速度（簡易的な処理）
                 ax_motion = ax if abs(ax) > ACC_MOTION_THRESHOLD else 0.0
                 ay_motion = ay if abs(ay) > ACC_MOTION_THRESHOLD else 0.0
                 az_motion = (
                     (az - GRAVITY) if abs(az - GRAVITY) > ACC_MOTION_THRESHOLD else 0.0
                 )
 
-            # カルマンフィルタで加速度をフィルタリング
-            kf_x.predict(dt)
-            kf_x.update(ax_motion)
-            x_filtered, vx, ax_filtered = kf_x.get_state()
+            # カルマンフィルタ処理
+            self.kf_x.predict(dt)
+            self.kf_x.update(ax_motion)
+            x_filtered, vx, ax_filtered = self.kf_x.get_state()
 
-            kf_y.predict(dt)
-            kf_y.update(ay_motion)
-            y_filtered, vy, ay_filtered = kf_y.get_state()
+            self.kf_y.predict(dt)
+            self.kf_y.update(ay_motion)
+            y_filtered, vy, ay_filtered = self.kf_y.get_state()
 
-            kf_z.predict(dt)
-            kf_z.update(az_motion)
-            z_filtered, vz, az_filtered = kf_z.get_state()
+            self.kf_z.predict(dt)
+            self.kf_z.update(az_motion)
+            z_filtered, vz, az_filtered = self.kf_z.get_state()
 
-            # 静止状態の判定と状態のリセット
+            # 静止状態処理
             if is_stationary:
-                # 速度と加速度を完全にリセット
-                kf_x.x[1] = 0.0  # 速度
-                kf_x.x[2] = 0.0  # 加速度
-                kf_x.P[1, 1] = KALMAN_RESET_COVARIANCE  # 速度の誤差共分散をリセット
-                kf_x.P[2, 2] = KALMAN_RESET_COVARIANCE  # 加速度の誤差共分散をリセット
-                vx = 0.0
-                ax_filtered = 0.0
-
-                kf_y.x[1] = 0.0
-                kf_y.x[2] = 0.0
-                kf_y.P[1, 1] = KALMAN_RESET_COVARIANCE
-                kf_y.P[2, 2] = KALMAN_RESET_COVARIANCE
-                vy = 0.0
-                ay_filtered = 0.0
-
-                kf_z.x[1] = 0.0
-                kf_z.x[2] = 0.0
-                kf_z.P[1, 1] = KALMAN_RESET_COVARIANCE
-                kf_z.P[2, 2] = KALMAN_RESET_COVARIANCE
-                vz = 0.0
-                az_filtered = 0.0
+                self._reset_velocity()
+                vx, vy, vz = 0.0, 0.0, 0.0
+                ax_filtered, ay_filtered, az_filtered = 0.0, 0.0, 0.0
             else:
-                # 動いている時でも、非常に小さい速度はノイズとして除去
-                if abs(vx) < VELOCITY_THRESHOLD:
-                    vx = 0.0
-                    kf_x.x[1] = 0.0
-                    kf_x.P[1, 1] = KALMAN_RESET_COVARIANCE
-                if abs(vy) < VELOCITY_THRESHOLD:
-                    vy = 0.0
-                    kf_y.x[1] = 0.0
-                    kf_y.P[1, 1] = KALMAN_RESET_COVARIANCE
-                if abs(vz) < VELOCITY_THRESHOLD:
-                    vz = 0.0
-                    kf_z.x[1] = 0.0
-                    kf_z.P[1, 1] = KALMAN_RESET_COVARIANCE
+                vx, vy, vz = self._apply_velocity_threshold(vx, vy, vz)
 
-            # 位置は積算（累積）するため、リセットしない
-            x, y, z = x_filtered, y_filtered, z_filtered
-
-            print(f"time: {t:.2f}")
-            print(
-                f"acc: {ax_filtered:.3f}, {ay_filtered:.3f}, {az_filtered:.3f}, "
-                f"vel: {vx:.3f}, {vy:.3f}, {vz:.3f}, "
-                f"pos: {x:.3f}, {y:.3f}, {z:.3f}"
+            # 状態を更新
+            self.state = MotionState(
+                ax=ax_filtered,
+                ay=ay_filtered,
+                az=az_filtered,
+                vx=vx,
+                vy=vy,
+                vz=vz,
+                x=x_filtered,
+                y=y_filtered,
+                z=z_filtered,
+                t=t,
+                is_stationary=is_stationary,
             )
+
+            if self._on_state_update:
+                self._on_state_update(self.state)
         else:
-            before_t = t
-except serial.SerialException as e:
-    print(f"Serial error: {e}")
-except Exception as e:
-    print(f"Error: {e}")
-    s.close()
-else:
-    s.close()
+            self.before_t = t
+
+    def _reset_velocity(self):
+        """速度をリセット"""
+        for kf in [self.kf_x, self.kf_y, self.kf_z]:
+            kf.x[1] = 0.0
+            kf.x[2] = 0.0
+            kf.P[1, 1] = KALMAN_RESET_COVARIANCE
+            kf.P[2, 2] = KALMAN_RESET_COVARIANCE
+
+    def _apply_velocity_threshold(self, vx: float, vy: float, vz: float):
+        """速度閾値を適用"""
+        if abs(vx) < VELOCITY_THRESHOLD:
+            vx = 0.0
+            self.kf_x.x[1] = 0.0
+            self.kf_x.P[1, 1] = KALMAN_RESET_COVARIANCE
+        if abs(vy) < VELOCITY_THRESHOLD:
+            vy = 0.0
+            self.kf_y.x[1] = 0.0
+            self.kf_y.P[1, 1] = KALMAN_RESET_COVARIANCE
+        if abs(vz) < VELOCITY_THRESHOLD:
+            vz = 0.0
+            self.kf_z.x[1] = 0.0
+            self.kf_z.P[1, 1] = KALMAN_RESET_COVARIANCE
+        return vx, vy, vz
+
+
+# シングルトンインスタンス
+_serial_controller: SerialController | None = None
+
+
+def get_serial_controller() -> SerialController:
+    """シリアルコントローラーのシングルトンを取得"""
+    global _serial_controller
+    if _serial_controller is None:
+        _serial_controller = SerialController()
+    return _serial_controller
