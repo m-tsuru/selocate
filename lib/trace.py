@@ -22,6 +22,7 @@ class Trace:
     t: int = -1
     x: float = 0
     y: float = 0
+    z: float = 0
     bssid: str = ""
     ssid: str = ""
     rssi: float = 0
