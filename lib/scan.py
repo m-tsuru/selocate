@@ -55,19 +55,69 @@ def list_interfaces() -> list[str]:
     return [iface.name() for iface in w.interfaces()]
 
 
-def scan(interface_name: str | None = None) -> list[dict]:
+# スキャン間隔を管理するためのグローバル変数
+_last_scan_time: float = 0
+_scan_lock = False
+
+
+def scan(
+    interface_name: str | None = None,
+    max_retries: int = 3,
+    retry_delay: float = 1.0,
+) -> list[dict]:
     """Wi-Fiネットワークをスキャンする
 
     Args:
         interface_name: 使用するインターフェース名（省略時は最初のインターフェース）
+        max_retries: スキャン失敗時のリトライ回数
+        retry_delay: リトライ間の待機時間（秒）
 
     Returns:
         スキャン結果のリスト
     """
+    global _last_scan_time, _scan_lock
+
+    # スキャン中の場合は前回の結果を返す
+    if _scan_lock:
+        iface = get_interface(name=interface_name)
+        if iface:
+            return _format_scan_results(iface.scan_results())
+        return []
+
+    # 前回のスキャンから十分な時間が経っていない場合は待機
+    elapsed = time.time() - _last_scan_time
+    if elapsed < SCAN_TIME:
+        time.sleep(SCAN_TIME - elapsed)
+
     iface = get_interface(name=interface_name)
-    iface.scan()
-    time.sleep(SCAN_TIME)
-    res = iface.scan_results()
+    if not iface:
+        return []
+
+    _scan_lock = True
+    try:
+        for attempt in range(max_retries):
+            try:
+                iface.scan()
+                time.sleep(SCAN_TIME)
+                _last_scan_time = time.time()
+                return _format_scan_results(iface.scan_results())
+            except Exception as e:
+                error_msg = str(e)
+                if "FAIL-BUSY" in error_msg or attempt < max_retries - 1:
+                    print(f"Scan attempt {attempt + 1} failed, retrying...")
+                    time.sleep(retry_delay)
+                else:
+                    print(f"Scan failed: {e}")
+                    # 失敗しても前回の結果を返す
+                    return _format_scan_results(iface.scan_results())
+    finally:
+        _scan_lock = False
+
+    return []
+
+
+def _format_scan_results(results) -> list[dict]:
+    """スキャン結果をフォーマットする"""
     return [
         {
             "ssid": r.ssid,
@@ -78,7 +128,7 @@ def scan(interface_name: str | None = None) -> list[dict]:
             "cipher": r.cipher,
             "akm": r.akm,
         }
-        for r in res
+        for r in results
     ]
 
 
