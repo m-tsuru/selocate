@@ -20,7 +20,9 @@ KALMAN_MEASUREMENT_VARIANCE = 5e-2  # 観測ノイズ共分散（下げると感
 KALMAN_RESET_COVARIANCE = 0.1  # リセット時の誤差共分散
 
 # 静止判定設定
-STATIONARY_THRESHOLD = 0.3  # 静止判定の閾値（重力加速度との差）（下げると動き検出しやすい）
+STATIONARY_THRESHOLD = (
+    0.3  # 静止判定の閾値（重力加速度との差）（下げると動き検出しやすい）
+)
 GRAVITY = 9.80665  # 重力加速度 [m/s²]
 
 # 加速度ノイズ除去設定
