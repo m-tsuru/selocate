@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from lib.scan import scan
 
-SCAN_INTERVAL = 2  # seconds
+SCAN_INTERVAL = 5  # seconds (increased to avoid FAIL-BUSY errors)
 TRACE_FILE_PREFIX = "trace"
 
 
@@ -37,6 +37,7 @@ class TraceState:
     ap_count: int = 0
     total_traces: int = 0
     last_scan_time: float = 0
+    scan_interval: float = 1.0
 
 
 class TraceController:
@@ -47,7 +48,8 @@ class TraceController:
     ):
         self.output_dir = Path(output_dir) if output_dir else Path(".")
         self.interface_name = interface_name
-        self.state = TraceState()
+        self.scan_interval = SCAN_INTERVAL
+        self.state = TraceState(scan_interval=self.scan_interval)
         self._task: asyncio.Task | None = None
         self._position_callback: Callable[[], tuple[float, float]] | None = None
         self._on_state_update: Callable[[TraceState, list[dict]], None] | None = None
@@ -56,6 +58,11 @@ class TraceController:
     def set_interface(self, interface_name: str | None):
         """使用するWi-Fiインターフェースを設定"""
         self.interface_name = interface_name
+
+    def set_scan_interval(self, interval: float):
+        """スキャン間隔を設定（秒）"""
+        self.scan_interval = max(1.0, interval)  # 最小1秒
+        self.state.scan_interval = self.scan_interval
 
     def set_position_callback(self, callback: Callable[[], tuple[float, float]]):
         """位置情報を取得するコールバックを設定"""
@@ -145,10 +152,10 @@ class TraceController:
                 if self._on_state_update:
                     self._on_state_update(self.state, networks)
 
-                await asyncio.sleep(SCAN_INTERVAL)
+                await asyncio.sleep(self.scan_interval)
             except Exception as e:
                 print(f"Trace loop error: {e}")
-                await asyncio.sleep(SCAN_INTERVAL)
+                await asyncio.sleep(self.scan_interval)
 
 
 # シングルトンインスタンス

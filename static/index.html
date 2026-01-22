@@ -74,6 +74,11 @@
         <p>Status: <span id="trace-status" class="status stopped">停止中</span></p>
         <p>Found Access Points: <span id="ap-count">0</span></p>
         <p>Total Traces: <span id="total-traces">0</span></p>
+        <p>
+            <label for="scan-interval">スキャン間隔: <span id="scan-interval-value">5</span>秒</label>
+            <input type="range" id="scan-interval" name="scan-interval" min="1" max="30" value="5" />
+            <button id="btn-set-interval">設定</button>
+        </p>
         <button id="btn-trace-start">Start</button>
         <button id="btn-trace-stop">Stop</button>
         <button id="btn-trace-reset">Reset</button>
@@ -174,6 +179,10 @@
                 }
                 document.getElementById('ap-count').textContent = data.ap_count || 0;
                 document.getElementById('total-traces').textContent = data.total_traces || 0;
+                if (data.scan_interval) {
+                    document.getElementById('scan-interval').value = data.scan_interval;
+                    document.getElementById('scan-interval-value').textContent = data.scan_interval;
+                }
             } catch (e) {
                 console.error('Trace state error:', e);
             }
@@ -209,6 +218,17 @@
         });
 
         // === Trace Control ===
+        const scanIntervalSlider = document.getElementById('scan-interval');
+        scanIntervalSlider.addEventListener('input', (e) => {
+            document.getElementById('scan-interval-value').textContent = e.target.value;
+        });
+
+        document.getElementById('btn-set-interval').addEventListener('click', async () => {
+            const interval = parseInt(scanIntervalSlider.value);
+            const result = await api.post(`/trace/interval?interval=${interval}`);
+            alert(`スキャン間隔を ${result.scan_interval} 秒に設定しました`);
+        });
+
         document.getElementById('btn-trace-start').addEventListener('click', async () => {
             await api.post('/trace/start');
             startUpdates();

@@ -169,7 +169,16 @@ async def trace_state():
         "ap_count": state.ap_count,
         "total_traces": state.total_traces,
         "save_date": state.save_date,
+        "scan_interval": state.scan_interval,
     }
+
+
+@api.post("/trace/interval")
+async def trace_set_interval(interval: float):
+    """スキャン間隔を設定（秒）"""
+    ctrl = get_trace_controller()
+    ctrl.set_scan_interval(interval)
+    return {"status": "ok", "scan_interval": ctrl.scan_interval}
 
 
 @api.get("/trace/data")
