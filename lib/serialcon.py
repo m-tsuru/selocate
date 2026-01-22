@@ -191,6 +191,7 @@ def run_motor(direction_power: int, wheel_power: int) -> str:
             s += "0"
         if i < 3:
             s += " "
+    print(s)
     return s
 
 
