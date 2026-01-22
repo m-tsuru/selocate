@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from lib.scan import scan
 
-SCAN_INTERVAL = 5  # seconds (increased to avoid FAIL-BUSY errors)
+SCAN_INTERVAL = 2  # seconds
 TRACE_FILE_PREFIX = "trace"
 
 
@@ -38,7 +38,7 @@ class TraceState:
     ap_count: int = 0
     total_traces: int = 0
     last_scan_time: float = 0
-    scan_interval: float = 1.0
+    scan_interval: float = 2.0
 
 
 class TraceController:
