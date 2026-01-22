@@ -79,35 +79,48 @@ def scan(
 
     # スキャン中の場合は前回の結果を返す
     if _scan_lock:
+        print("[scan] Lock active, returning cached results")
         iface = get_interface(name=interface_name)
         if iface:
-            return _format_scan_results(iface.scan_results())
+            results = _format_scan_results(iface.scan_results())
+            print(f"[scan] Cached results: {len(results)} networks")
+            return results
         return []
 
     # 前回のスキャンから十分な時間が経っていない場合は待機
     elapsed = time.time() - _last_scan_time
     if elapsed < SCAN_TIME:
-        time.sleep(SCAN_TIME - elapsed)
+        wait_time = SCAN_TIME - elapsed
+        print(f"[scan] Waiting {wait_time:.1f}s before next scan")
+        time.sleep(wait_time)
 
     iface = get_interface(name=interface_name)
     if not iface:
+        print("[scan] No interface found")
         return []
+
+    print(f"[scan] Using interface: {iface.name()}")
 
     _scan_lock = True
     try:
         for attempt in range(max_retries):
             try:
+                print(f"[scan] Starting scan attempt {attempt + 1}")
                 iface.scan()
                 time.sleep(SCAN_TIME)
                 _last_scan_time = time.time()
-                return _format_scan_results(iface.scan_results())
+                results = iface.scan_results()
+                formatted = _format_scan_results(results)
+                print(f"[scan] Found {len(formatted)} networks")
+                return formatted
             except Exception as e:
                 error_msg = str(e)
+                print(f"[scan] Error: {error_msg}")
                 if "FAIL-BUSY" in error_msg or attempt < max_retries - 1:
-                    print(f"Scan attempt {attempt + 1} failed, retrying...")
+                    print(f"[scan] Attempt {attempt + 1} failed, retrying...")
                     time.sleep(retry_delay)
                 else:
-                    print(f"Scan failed: {e}")
+                    print(f"[scan] Scan failed: {e}")
                     # 失敗しても前回の結果を返す
                     return _format_scan_results(iface.scan_results())
     finally:
