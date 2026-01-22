@@ -184,9 +184,9 @@ def run_motor(direction_power: int, wheel_power: int) -> str:
     s = ""
     for i in range(4):
         if WHEEL_PORT[i]:
-            s += str(direction_power * DIRECTION[i])
-        elif DIRECTION_PORT[i]:
             s += str(wheel_power * DIRECTION[i])
+        elif DIRECTION_PORT[i]:
+            s += str(direction_power * DIRECTION[i])
         else:
             s += "0"
         if i < 3:
