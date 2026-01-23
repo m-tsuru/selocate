@@ -12,7 +12,7 @@ import serial
 # === パラメータ設定（調整可能な変数） ===
 # シリアル通信設定
 EXPECTED_ELEMENTS = 8  # パース時の期待要素数
-BAUD_RATE = 115200  # シリアル通信のボーレート
+BAUD_RATE = 9600  # シリアル通信のボーレート
 
 # カルマンフィルター設定
 KALMAN_PROCESS_VARIANCE = 1e-3  # プロセスノイズ共分散（上げると追従性向上）
@@ -269,6 +269,9 @@ class SerialController:
         self.running = False
         self.state = MotionState()
         self.motor = MotorControl()
+        self._last_motor = MotorControl()  # 前回送信したモーター値
+        self._motor_send_interval = 0.1  # モーター送信間隔（秒）
+        self._last_motor_send = 0.0  # 最後にモーターコマンドを送信した時刻
         self.before_t = 0.0
         self._task: asyncio.Task | None = None
         self._on_state_update: Callable[[MotionState], None] | None = None
@@ -336,6 +339,8 @@ class SerialController:
 
     async def _loop(self):
         """メインループ"""
+        import time
+
         while self.running:
             try:
                 # シリアルデータを受信して処理
@@ -343,12 +348,28 @@ class SerialController:
                     raw = self.serial.readline().decode("utf-8").strip()
                     await self._process_data(raw)
 
-                # モーター制御を常に送信（データ受信に関係なく）
-                if self.serial and self.serial.is_open:
+                # モーター制御：値が変わったとき、または一定間隔で送信
+                now = time.time()
+                motor_changed = (
+                    self.motor.direction_power != self._last_motor.direction_power
+                    or self.motor.wheel_power != self._last_motor.wheel_power
+                )
+                interval_elapsed = (
+                    now - self._last_motor_send
+                ) >= self._motor_send_interval
+
+                if (
+                    self.serial
+                    and self.serial.is_open
+                    and (motor_changed or interval_elapsed)
+                ):
                     props = run_motor(
                         self.motor.direction_power, self.motor.wheel_power
                     )
                     self.serial.write((props + "\n").encode())
+                    self._last_motor.direction_power = self.motor.direction_power
+                    self._last_motor.wheel_power = self.motor.wheel_power
+                    self._last_motor_send = now
 
                 await asyncio.sleep(0.01)  # 10ms待機
             except Exception as e:
